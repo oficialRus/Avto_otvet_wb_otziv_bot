@@ -106,15 +106,17 @@ func Load() (Config, error) {
 	cfg.TemplateBad = getEnv(envTemplateBad, defaultTemplateBad)
 	cfg.TemplateGood = getEnv(envTemplateGood, defaultTemplateGood)
 	cfg.MetricsAddr = getEnv(envMetricsAddr, defaultMetricsAddr)
-	cfg.TelegramToken = os.Getenv(envTelegramToken) // optional, no default
+	cfg.TelegramToken = os.Getenv(envTelegramToken) // now required
+	cfg.WBToken = os.Getenv(envWBToken) // optional, will be provided via bot
 
 	// Validation
-	if cfg.WBToken == "" {
-		return Config{}, fmt.Errorf("%s is required", envWBToken)
+	if cfg.TelegramToken == "" {
+		return Config{}, fmt.Errorf("%s is required", envTelegramToken)
 	}
-	if cfg.PollInterval < time.Minute {
+	if cfg.PollInterval < time.Minute && cfg.PollInterval > 0 {
 		return Config{}, fmt.Errorf("poll interval too small (>=1m)")
 	}
+	// WBToken is no longer required - it will be provided via Telegram bot
 	return cfg, nil
 }
 

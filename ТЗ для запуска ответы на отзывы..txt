@@ -1,0 +1,10 @@
+
+
+$env:TPL_GOOD = "Спасибо за ваш отзыв и доверие к нашему магазину!  Нам очень важно, что вы делитесь своим опытом  это помогает нам становиться лучше и радовать вас ещё больше. Мы внимательно относимся к каждому комментарию и всегда стараемся, чтобы покупки у нас были удобными, качественными и приятными. Будем рады видеть вас снова! "
+
+$env:TPL_BAD  = "Здравствуйте! Сожалеем, что товар не оправдал ожиданий. У вас есть инструкция, как связаться с нами. Hапишите, поможем решить вашу проблему!."     
+
+$env:WB_TOKEN = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjIwMjUwNTIwdjEiLCJ0eXAiOiJKV1QifQ.eyJlbnQiOjEsImV4cCI6MTc3MDYxMTQ4NywiaWQiOiIwMTk4OTRkMi05ZTlhLTcyZGItYTRhMC04MzkxZDk0OTZmNmMiLCJpaWQiOjUxMzExODQ1LCJvaWQiOjEyODY3OTcsInMiOjEyOCwic2lkIjoiMDlkZDg1NzItMGE0Ny00NDU0LWI5NWUtZTJjNDk4M2ZiZWY1IiwidCI6ZmFsc2UsInVpZCI6NTEzMTE4NDV9.Tu5bTyummJRpwi3e_kLPQvUwDBY22C-qhVqBIJFtcA4hKllr0Zl2JMzee7654dCFbcSAWLpKsoNrOYTREdwGBA" 
+
+
+ go run ./cmd/feedback-bot   
