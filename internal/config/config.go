@@ -8,15 +8,16 @@ import (
 
 // Env variable names (documented for reference)
 const (
-	envVersion      = "APP_VERSION"
-	envLogLevel     = "LOG_LEVEL"
-	envWBToken      = "WB_TOKEN"
-	envWBBaseURL    = "WB_BASE_URL"
-	envPollInterval = "POLL_INTERVAL" // Go duration string, e.g. "10m", "30s"
-	envDBPath       = "DB_PATH"
-	envTemplateBad  = "TPL_BAD"
-	envTemplateGood = "TPL_GOOD"
-	envMetricsAddr  = "METRICS_ADDR"
+	envVersion       = "APP_VERSION"
+	envLogLevel      = "LOG_LEVEL"
+	envWBToken       = "WB_TOKEN"
+	envWBBaseURL     = "WB_BASE_URL"
+	envPollInterval  = "POLL_INTERVAL" // Go duration string, e.g. "10m", "30s"
+	envDBPath        = "DB_PATH"
+	envTemplateBad   = "TPL_BAD"
+	envTemplateGood  = "TPL_GOOD"
+	envMetricsAddr   = "METRICS_ADDR"
+	envTelegramToken = "TELEGRAM_TOKEN"
 )
 
 // Config aggregates all runtime settings required by the application.
@@ -47,15 +48,16 @@ const (
 //
 //go:generate go run github.com/google/wire/cmd/wire
 type Config struct {
-	Version      string        // app semantic version or git SHA
-	LogLevel     string        // debug, info, warn, error, fatal (zap levels)
-	WBToken      string        // Bearer token with Feedback scope bit 7
-	WBBaseURL    string        // https://feedbacks-api.wildberries.ru or sandbox URL
-	PollInterval time.Duration // polling interval, default 10m
-	DBPath       string        // path to SQLite file (or DSN for other drivers)
-	TemplateBad  string        // reply text for 1–3★ reviews
-	TemplateGood string        // reply text for 4–5★ reviews
-	MetricsAddr  string        // listen address for Prometheus endpoint, default :8080
+	Version       string        // app semantic version or git SHA
+	LogLevel      string        // debug, info, warn, error, fatal (zap levels)
+	WBToken       string        // Bearer token with Feedback scope bit 7
+	WBBaseURL     string        // https://feedbacks-api.wildberries.ru or sandbox URL
+	PollInterval  time.Duration // polling interval, default 10m
+	DBPath        string        // path to SQLite file (or DSN for other drivers)
+	TemplateBad   string        // reply text for 1–3★ reviews
+	TemplateGood  string        // reply text for 4–5★ reviews
+	MetricsAddr   string        // listen address for Prometheus endpoint, default :8080
+	TelegramToken string        // Telegram bot token for notifications and control
 }
 
 var (
@@ -104,6 +106,7 @@ func Load() (Config, error) {
 	cfg.TemplateBad = getEnv(envTemplateBad, defaultTemplateBad)
 	cfg.TemplateGood = getEnv(envTemplateGood, defaultTemplateGood)
 	cfg.MetricsAddr = getEnv(envMetricsAddr, defaultMetricsAddr)
+	cfg.TelegramToken = os.Getenv(envTelegramToken) // optional, no default
 
 	// Validation
 	if cfg.WBToken == "" {

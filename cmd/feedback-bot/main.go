@@ -8,6 +8,7 @@ import (
 
 	"feedback_bot/internal/config"
 	"feedback_bot/internal/scheduler"
+	"feedback_bot/internal/telegram"
 
 	"feedback_bot/internal/service"
 
@@ -67,11 +68,25 @@ func main() {
 	poller := scheduler.New(cfg.PollInterval, svc.HandleCycle, log)
 	go poller.Run(ctx)
 
-	// 9. Wait for termination signal
+	// 9. Initialize and start Telegram bot (optional)
+	var tgBot *telegram.Bot
+	if cfg.TelegramToken != "" {
+		tgBot, err = telegram.New(cfg.TelegramToken, svc, log, ctx)
+		if err != nil {
+			log.Warnw("failed to initialize telegram bot", "err", err)
+		} else if tgBot != nil {
+			go tgBot.Run(ctx)
+			log.Info("telegram bot integration enabled")
+		}
+	} else {
+		log.Info("telegram bot token not provided, bot disabled")
+	}
+
+	// 10. Wait for termination signal
 	<-ctx.Done()
 	log.Info("shutdown signal received, shutting down ...")
 
-	// 10. Graceful shutdown
+	// 11. Graceful shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
