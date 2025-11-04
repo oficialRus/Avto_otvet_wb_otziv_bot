@@ -13,11 +13,15 @@ const (
 	envWBToken       = "WB_TOKEN"
 	envWBBaseURL     = "WB_BASE_URL"
 	envPollInterval  = "POLL_INTERVAL" // Go duration string, e.g. "10m", "30s"
-	envDBPath        = "DB_PATH"
+	envDBPath        = "DB_PATH"       // SQLite file path or PostgreSQL DSN (if DB_TYPE=postgres)
+	envDBType        = "DB_TYPE"       // "sqlite" or "postgres" (default: "sqlite")
 	envTemplateBad   = "TPL_BAD"
 	envTemplateGood  = "TPL_GOOD"
 	envMetricsAddr   = "METRICS_ADDR"
 	envTelegramToken = "TELEGRAM_TOKEN"
+	envChannelUsername = "REQUIRED_CHANNEL"
+	envChannelID       = "REQUIRED_CHANNEL_ID"
+	envAdminUserID    = "ADMIN_USER_ID"
 )
 
 // Config aggregates all runtime settings required by the application.
@@ -53,11 +57,15 @@ type Config struct {
 	WBToken       string        // Bearer token with Feedback scope bit 7
 	WBBaseURL     string        // https://feedbacks-api.wildberries.ru or sandbox URL
 	PollInterval  time.Duration // polling interval, default 10m
-	DBPath        string        // path to SQLite file (or DSN for other drivers)
-	TemplateBad   string        // reply text for 1–3★ reviews
-	TemplateGood  string        // reply text for 4–5★ reviews
-	MetricsAddr   string        // listen address for Prometheus endpoint, default :8080
-	TelegramToken string        // Telegram bot token for notifications and control
+	DBType        string        // "sqlite" or "postgres" (default: "sqlite")
+	DBPath        string        // path to SQLite file (or DSN for PostgreSQL)
+	TemplateBad      string        // reply text for 1–3★ reviews
+	TemplateGood      string        // reply text for 4–5★ reviews
+	MetricsAddr       string        // listen address for Prometheus endpoint, default :8080
+	TelegramToken     string        // Telegram bot token for notifications and control
+	RequiredChannel   string        // Required Telegram channel username (e.g., "@channel" or "channel")
+	RequiredChannelID int64         // Required Telegram channel ID (numeric). If set, will be used directly instead of username
+	AdminUserID       int64         // Admin user ID for /admin command access
 }
 
 var (
@@ -103,11 +111,29 @@ func Load() (Config, error) {
 	}
 
 	cfg.DBPath = getEnv(envDBPath, defaultDBPath)
+	cfg.DBType = getEnv(envDBType, "sqlite") // default to SQLite for backward compatibility
 	cfg.TemplateBad = getEnv(envTemplateBad, defaultTemplateBad)
 	cfg.TemplateGood = getEnv(envTemplateGood, defaultTemplateGood)
 	cfg.MetricsAddr = getEnv(envMetricsAddr, defaultMetricsAddr)
 	cfg.TelegramToken = os.Getenv(envTelegramToken) // now required
 	cfg.WBToken = os.Getenv(envWBToken) // optional, will be provided via bot
+	cfg.RequiredChannel = getEnv(envChannelUsername, "")
+	
+	// Parse channel ID if provided (takes precedence over username)
+	if idStr := os.Getenv(envChannelID); idStr != "" {
+		var err error
+		if cfg.RequiredChannelID, err = parseInt64(idStr); err != nil {
+			return Config{}, fmt.Errorf("invalid %s: %w", envChannelID, err)
+		}
+	}
+	
+	// Parse admin user ID if provided
+	if idStr := os.Getenv(envAdminUserID); idStr != "" {
+		var err error
+		if cfg.AdminUserID, err = parseInt64(idStr); err != nil {
+			return Config{}, fmt.Errorf("invalid %s: %w", envAdminUserID, err)
+		}
+	}
 
 	// Validation
 	if cfg.TelegramToken == "" {
@@ -115,6 +141,14 @@ func Load() (Config, error) {
 	}
 	if cfg.PollInterval < time.Minute && cfg.PollInterval > 0 {
 		return Config{}, fmt.Errorf("poll interval too small (>=1m)")
+	}
+	// Validate DBType
+	if cfg.DBType != "sqlite" && cfg.DBType != "postgres" {
+		return Config{}, fmt.Errorf("invalid %s: must be 'sqlite' or 'postgres'", envDBType)
+	}
+	// If PostgreSQL, DBPath should be a DSN
+	if cfg.DBType == "postgres" && cfg.DBPath == "" {
+		return Config{}, fmt.Errorf("%s is required when %s=postgres", envDBPath, envDBType)
 	}
 	// WBToken is no longer required - it will be provided via Telegram bot
 	return cfg, nil
@@ -126,4 +160,11 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// parseInt64 parses a string as int64
+func parseInt64(s string) (int64, error) {
+	var result int64
+	_, err := fmt.Sscanf(s, "%d", &result)
+	return result, err
 }
