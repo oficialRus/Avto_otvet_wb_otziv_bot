@@ -194,7 +194,7 @@ scrape_configs:
 prometheus --config.file=prometheus.yml
 ```
 
-Метрики будут доступны в Prometheus UI на `http://localhost:9090`
+Метрики будут доступны в Prometheus UI на `http://localhost:    9090`
 
 ---
 
