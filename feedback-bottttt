@@ -23,7 +23,7 @@ echo ""
 # =============================================================================
 
 # Telegram Bot Token (ОБЯЗАТЕЛЬНО)
-export TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-8303011908:AAEtfOAydoMDfEA_JzydZ29bQmPsQ9eZGM8}"
+export TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-8447547104:AAF6IZSfMsYhz33yI9AtWNXogrdKmNDzYtk}"
 
 # =============================================================================
 # ОПЦИОНАЛЬНЫЕ ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ

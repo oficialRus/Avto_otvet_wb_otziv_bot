@@ -148,16 +148,20 @@ func New(token string, configStore storage.ConfigStore, userStore storage.Store,
 	// Log subscription check configuration
 	if requiredChannelID != 0 || channel != "" {
 		if requiredChannelID != 0 {
-			logger.Infow("subscription check configured",
+			logger.Infow("✅ SUBSCRIPTION CHECK ENABLED",
 				"channel_id", requiredChannelID,
-				"channel_username", channel)
+				"channel_username", channel,
+				"important", "Bot must be administrator in the channel to check subscriptions")
 		} else {
-			logger.Infow("subscription check configured",
-				"channel_username", channel)
+			logger.Infow("✅ SUBSCRIPTION CHECK ENABLED",
+				"channel_username", channel,
+				"tip", "Consider using REQUIRED_CHANNEL_ID for better performance",
+				"important", "Bot must be administrator in the channel to check subscriptions")
 		}
 	} else {
-		logger.Warnw("subscription check DISABLED - no channel configured",
-			"tip", "Set REQUIRED_CHANNEL_ID or REQUIRED_CHANNEL to enable subscription check")
+		logger.Warnw("⚠️ SUBSCRIPTION CHECK DISABLED - no channel configured",
+			"tip", "Set REQUIRED_CHANNEL_ID or REQUIRED_CHANNEL to enable subscription check",
+			"warning", "All users will have access without subscription check")
 	}
 
 	bot.log.Infow("telegram bot authorized", "username", api.Self.UserName)
@@ -618,14 +622,25 @@ func (b *Bot) checkChannelSubscription(chatID int64) bool {
 	cached, exists := b.subscriptionCache[chatID]
 	if exists && time.Now().Before(cached.expiresAt) {
 		b.subscriptionCacheMu.RUnlock()
-		b.log.Debugw("subscription check from cache", "chat_id", chatID, "is_subscribed", cached.isSubscribed)
+		b.log.Debugw("subscription check from cache",
+			"chat_id", chatID,
+			"is_subscribed", cached.isSubscribed,
+			"cache_expires_at", cached.expiresAt)
 		return cached.isSubscribed
 	}
 	b.subscriptionCacheMu.RUnlock()
 
+	b.log.Infow("performing fresh subscription check",
+		"chat_id", chatID,
+		"channel_id", b.requiredChannelID,
+		"channel_username", b.requiredChannel)
+
 	// If no channel requirement set, allow access silently (for backwards compatibility)
 	// Don't log warning on every check - only log once at startup
 	if b.requiredChannelID == 0 && b.requiredChannel == "" {
+		b.log.Debugw("subscription check skipped - no channel configured",
+			"chat_id", chatID,
+			"tip", "Set REQUIRED_CHANNEL_ID or REQUIRED_CHANNEL to enable subscription check")
 		return true // Allow access if no channel requirement
 	}
 
@@ -636,13 +651,16 @@ func (b *Bot) checkChannelSubscription(chatID int64) bool {
 	if b.requiredChannelID != 0 {
 		channelChatID = b.requiredChannelID
 		channelIdentifier = fmt.Sprintf("ID:%d", b.requiredChannelID)
-		b.log.Debugw("using channel ID directly", "chat_id", chatID, "channel_id", channelChatID)
+		b.log.Infow("checking subscription using channel ID",
+			"chat_id", chatID,
+			"channel_id", channelChatID,
+			"channel_username", b.requiredChannel)
 	} else {
 		// Fallback to username method
 		channelUsername := strings.TrimPrefix(b.requiredChannel, "@")
 		channelIdentifier = b.requiredChannel
 
-		b.log.Debugw("getting channel ID from username",
+		b.log.Infow("getting channel ID from username",
 			"chat_id", chatID,
 			"channel", b.requiredChannel,
 			"username", channelUsername)
@@ -656,17 +674,17 @@ func (b *Bot) checkChannelSubscription(chatID int64) bool {
 
 		chat, err := b.api.GetChat(chatConfig)
 		if err != nil {
-			b.log.Errorw("❌ FAILED: Cannot get channel info",
+			b.log.Errorw("FAILED: Cannot get channel info - bot may not have access",
 				"channel", b.requiredChannel,
 				"username", channelUsername,
 				"chat_id", chatID,
 				"error", err.Error(),
-				"tip", "Try using REQUIRED_CHANNEL_ID instead, or ensure bot is admin")
+				"tip", "Try using REQUIRED_CHANNEL_ID instead, or ensure bot is admin in the channel")
 			return false
 		}
 
 		channelChatID = chat.ID
-		b.log.Debugw("channel ID retrieved from username",
+		b.log.Infow("channel ID retrieved from username",
 			"chat_id", chatID,
 			"channel_id", channelChatID,
 			"channel_title", chat.Title)
@@ -682,12 +700,12 @@ func (b *Bot) checkChannelSubscription(chatID int64) bool {
 
 	member, err := b.api.GetChatMember(memberConfig)
 	if err != nil {
-		b.log.Errorw("❌ FAILED: Cannot check subscription - bot must be administrator!",
+		b.log.Errorw("FAILED: Cannot check subscription - bot must be administrator in the channel!",
 			"chat_id", chatID,
 			"channel", channelIdentifier,
 			"channel_id", channelChatID,
 			"error", err.Error(),
-			"solution", "Bot must be added as administrator to the channel")
+			"solution", "Bot must be added as administrator to the channel with permission to view members")
 		return false
 	}
 
@@ -695,11 +713,12 @@ func (b *Bot) checkChannelSubscription(chatID int64) bool {
 	status := member.Status
 	isSubscribed := status == "member" || status == "administrator" || status == "creator"
 
-	// Log only at debug level to reduce noise
-	b.log.Debugw("subscription check result",
+	// Log at info level for better diagnostics
+	b.log.Infow("subscription check result",
 		"chat_id", chatID,
 		"channel", channelIdentifier,
-		"status", status,
+		"channel_id", channelChatID,
+		"user_status", status,
 		"is_subscribed", isSubscribed)
 
 	// Cache result for 5 minutes
@@ -714,10 +733,12 @@ func (b *Bot) checkChannelSubscription(chatID int64) bool {
 	b.subscriptionCacheMu.Unlock()
 
 	if !isSubscribed {
-		b.log.Warnw("user not subscribed",
+		b.log.Warnw("user is NOT subscribed to the channel",
 			"chat_id", chatID,
 			"channel", channelIdentifier,
-			"status", status)
+			"channel_id", channelChatID,
+			"user_status", status,
+			"allowed_statuses", "member, administrator, creator")
 	}
 
 	return isSubscribed
@@ -729,17 +750,31 @@ func (b *Bot) sendChannelSubscriptionMessage(chatID int64) {
 
 	// Use username for URL (even if we use ID for checking)
 	var channelUsername string
+	var channelDisplay string
 	if b.requiredChannel != "" {
 		channelUsername = strings.TrimPrefix(b.requiredChannel, "@")
+		channelDisplay = "@" + channelUsername
+	} else if b.requiredChannelID != 0 {
+		// If only ID is set, try to construct URL
+		channelUsername = "novikovpromarket" // fallback - should be set via REQUIRED_CHANNEL
+		channelDisplay = fmt.Sprintf("канал (ID: %d)", b.requiredChannelID)
+		b.log.Warnw("channel username not set, using fallback",
+			"channel_id", b.requiredChannelID,
+			"tip", "Set REQUIRED_CHANNEL environment variable for better user experience")
 	} else {
-		// If only ID is set, construct URL (channel might not have username)
-		channelUsername = "novikovpromarket" // fallback
+		// This shouldn't happen, but handle it gracefully
+		channelUsername = "novikovpromarket"
+		channelDisplay = "канал"
+		b.log.Errorw("neither channel ID nor username is set",
+			"chat_id", chatID,
+			"warning", "Subscription check should not be called without channel configuration")
 	}
 	channelURL := "https://t.me/" + channelUsername
 
-	b.log.Debugw("subscription check details",
+	b.log.Infow("subscription message details",
 		"chat_id", chatID,
 		"channel_username", channelUsername,
+		"channel_id", b.requiredChannelID,
 		"channel_url", channelURL)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -758,12 +793,16 @@ func (b *Bot) sendChannelSubscriptionMessage(chatID int64) {
 📢 *%s*
 
 После подписки нажмите кнопку "✅ Я подписался, проверить" для проверки.`,
-		b.requiredChannel)
+		channelDisplay)
 
 	message := tgbotapi.NewMessage(chatID, msg)
 	message.ParseMode = tgbotapi.ModeMarkdown
 	message.ReplyMarkup = keyboard
-	b.api.Send(message)
+	if _, err := b.api.Send(message); err != nil {
+		b.log.Errorw("failed to send subscription message",
+			"chat_id", chatID,
+			"error", err.Error())
+	}
 }
 
 func (b *Bot) handleViewInfo(chatID int64, ctx context.Context) {

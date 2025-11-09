@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -162,9 +163,7 @@ func getEnv(key, def string) string {
 	return def
 }
 
-// parseInt64 parses a string as int64
+// parseInt64 parses a string as int64 (supports negative numbers)
 func parseInt64(s string) (int64, error) {
-	var result int64
-	_, err := fmt.Sscanf(s, "%d", &result)
-	return result, err
+	return strconv.ParseInt(s, 10, 64)
 }
