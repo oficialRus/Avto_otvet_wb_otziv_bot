@@ -1,0 +1,134 @@
+#!/bin/bash
+
+# =============================================================================
+# Скрипт запуска Feedback Bot для сервера (Linux)
+# =============================================================================
+
+set -e
+
+# Цвета для вывода
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+echo -e "${CYAN}===============================================================================${NC}"
+echo -e "${CYAN}Запуск Feedback Bot${NC}"
+echo -e "${CYAN}===============================================================================${NC}"
+echo ""
+
+# =============================================================================
+# ОБЯЗАТЕЛЬНЫЕ ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ
+# =============================================================================
+
+# Telegram Bot Token (ОБЯЗАТЕЛЬНО)
+export TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-8303011908:AAEtfOAydoMDfEA_JzydZ29bQmPsQ9eZGM8}"
+
+# =============================================================================
+# ОПЦИОНАЛЬНЫЕ ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ
+# =============================================================================
+
+# Уровень логирования (по умолчанию: info)
+export LOG_LEVEL="${LOG_LEVEL:-info}"
+
+# База данных (по умолчанию: SQLite)
+export DB_TYPE="${DB_TYPE:-sqlite}"
+export DB_PATH="${DB_PATH:-data/feedbacks.db}"
+
+# Для PostgreSQL раскомментируйте и настройте:
+# export DB_TYPE="postgres"
+# export DB_PATH="host=localhost port=5432 user=feedback_bot password=ваш_пароль dbname=feedbacks sslmode=disable"
+
+# Канал для проверки подписки (опционально)
+export REQUIRED_CHANNEL_ID="${REQUIRED_CHANNEL_ID:--1003294078901}"
+export REQUIRED_CHANNEL="${REQUIRED_CHANNEL:-novikovpromarket}"
+
+# ID администратора (для команды /admin)
+export ADMIN_USER_ID="${ADMIN_USER_ID:-7217012505}"
+
+# Адрес для метрик Prometheus (по умолчанию: :8080)
+export METRICS_ADDR="${METRICS_ADDR:-:8080}"
+
+# =============================================================================
+# ВЫВОД КОНФИГУРАЦИИ
+# =============================================================================
+
+echo -e "${GREEN}[КОНФИГУРАЦИЯ]${NC}"
+echo ""
+echo -e "  Telegram Token: ${GREEN}SET${NC}"
+echo -e "  Database Type: ${GREEN}${DB_TYPE}${NC}"
+if [ "$DB_TYPE" = "postgres" ]; then
+    echo -e "  Database DSN: ${GREEN}$(echo $DB_PATH | sed 's/password=[^ ]*/password=***/')${NC}"
+else
+    echo -e "  Database Path: ${GREEN}${DB_PATH}${NC}"
+fi
+echo -e "  Channel ID: ${GREEN}${REQUIRED_CHANNEL_ID}${NC}"
+echo -e "  Channel: ${GREEN}@${REQUIRED_CHANNEL}${NC}"
+echo -e "  Admin User ID: ${GREEN}${ADMIN_USER_ID}${NC}"
+echo -e "  Log Level: ${GREEN}${LOG_LEVEL}${NC}"
+echo -e "  Metrics Addr: ${GREEN}${METRICS_ADDR}${NC}"
+echo ""
+
+# =============================================================================
+# ПРОВЕРКА ОБЯЗАТЕЛЬНЫХ ПЕРЕМЕННЫХ
+# =============================================================================
+
+if [ -z "$TELEGRAM_TOKEN" ]; then
+    echo -e "${RED}ОШИБКА: TELEGRAM_TOKEN не установлен!${NC}"
+    echo -e "${YELLOW}Установите переменную окружения TELEGRAM_TOKEN${NC}"
+    exit 1
+fi
+
+# =============================================================================
+# СОЗДАНИЕ ДИРЕКТОРИИ ДЛЯ БД (если используется SQLite)
+# =============================================================================
+
+if [ "$DB_TYPE" = "sqlite" ]; then
+    DB_DIR=$(dirname "$DB_PATH")
+    if [ ! -d "$DB_DIR" ]; then
+        echo -e "${YELLOW}Создание директории для базы данных: ${DB_DIR}${NC}"
+        mkdir -p "$DB_DIR"
+    fi
+fi
+
+# =============================================================================
+# ВАЖНАЯ ИНФОРМАЦИЯ
+# =============================================================================
+
+echo -e "${YELLOW}===============================================================================${NC}"
+echo -e "${YELLOW}ВАЖНО!${NC}"
+echo -e "${YELLOW}===============================================================================${NC}"
+echo -e "  1. Бот должен быть добавлен в канал @${REQUIRED_CHANNEL} как администратор!"
+echo -e "     Это необходимо для проверки подписчиков."
+echo ""
+echo -e "  2. Найдите вашего бота в Telegram и отправьте /start"
+echo ""
+echo -e "  3. Для администратора: отправьте /admin для просмотра статистики"
+echo -e "${YELLOW}===============================================================================${NC}"
+echo ""
+
+# =============================================================================
+# ОПРЕДЕЛЕНИЕ СПОСОБА ЗАПУСКА
+# =============================================================================
+
+# Проверяем, есть ли собранный бинарник
+if [ -f "./feedback-bot" ] && [ -x "./feedback-bot" ]; then
+    echo -e "${GREEN}Запуск собранного бинарника...${NC}"
+    echo ""
+    exec ./feedback-bot
+elif [ -f "./feedback-bot.exe" ] && [ -x "./feedback-bot.exe" ]; then
+    echo -e "${GREEN}Запуск собранного бинарника (Windows)...${NC}"
+    echo ""
+    exec ./feedback-bot.exe
+elif command -v go &> /dev/null; then
+    echo -e "${GREEN}Запуск через go run...${NC}"
+    echo ""
+    exec go run ./cmd/feedback-bot
+else
+    echo -e "${RED}ОШИБКА: Не найден бинарник и Go не установлен!${NC}"
+    echo -e "${YELLOW}Установите Go или соберите бинарник:${NC}"
+    echo -e "  go build -o feedback-bot ./cmd/feedback-bot"
+    exit 1
+fi
+
